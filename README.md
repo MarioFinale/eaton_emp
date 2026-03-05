@@ -1,8 +1,8 @@
 # Eaton EMP – Home Assistant Integration
 
 [![HACS Badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-[![GitHub Release](https://img.shields.io/github/v/release/MarioFinale/eaton-emp)](https://github.com/MarioFinale/eaton-emp/releases)
-[![License](https://img.shields.io/github/license/MarioFinale/eaton-emp)](LICENSE)
+[![GitHub Release](https://img.shields.io/github/v/release/MarioFinale/eaton_emp)](https://github.com/MarioFinale/eaton_emp/releases)
+[![License](https://img.shields.io/github/license/MarioFinale/eaton_emp)](LICENSE)
 
 <p align="center">
   <img src="https://dynamicmedia.eaton.com/is/image/eaton/EMPDT1H1C2_R" width="320" alt="Eaton Environmental Monitoring Probe Gen 2">
