@@ -21,7 +21,7 @@ class EatonEmpDryContactSensor(CoordinatorEntity, BinarySensorEntity):
             self._attr_name = coordinator.dry_contact_1_name
         else:
             self._attr_name = coordinator.dry_contact_2_name
-        self._attr_unique_id = f"{DOMAIN}_dry_contact_{index}"
+        self._attr_unique_id = f"{self.coordinator.entry_id}_dry_contact_{index}"
 
     @property
     def device_info(self):

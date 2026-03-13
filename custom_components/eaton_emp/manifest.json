@@ -2,7 +2,7 @@
   "domain": "eaton_emp",
   "name": "Eaton Environmental Monitoring Probe",
   "icon": "mdi:thermometer",
-  "version": "1.1.2", 
+  "version": "1.1.3", 
   "config_flow": true,
   "documentation": "https://github.com/MarioFinale/eaton_emp",
   "issue_tracker": "https://github.com/MarioFinale/eaton_emp/issues",

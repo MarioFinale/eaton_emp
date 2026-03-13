@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from datetime import timedelta
 
@@ -47,6 +48,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     dc2_name = entry.options.get(CONF_DRY_CONTACT_2_NAME, DEFAULT_DRY_CONTACT_2_NAME)
     temp_unit = entry.options.get(CONF_TEMP_UNIT, DEFAULT_TEMP_UNIT)
 
+    if DOMAIN + "_locks" not in hass.data:
+        hass.data[DOMAIN + "_locks"] = {}
+    lock = hass.data[DOMAIN + "_locks"].setdefault(serial_port, asyncio.Lock())
+
     client = AsyncModbusSerialClient(
         framer=FramerType.RTU,
         port=serial_port,
@@ -68,6 +73,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         dry_contact_2_name=dc2_name,
         temp_unit=temp_unit,
         entry_id=entry.entry_id,
+        lock=lock,
     )
 
     await coordinator.async_config_entry_first_refresh()
@@ -99,6 +105,7 @@ class EatonEmpCoordinator(DataUpdateCoordinator):
         dry_contact_2_name: str,
         temp_unit: str,
         entry_id: str,
+        lock: asyncio.Lock,
     ) -> None:
         self.client = client
         self.slave_id = slave_id
@@ -107,6 +114,7 @@ class EatonEmpCoordinator(DataUpdateCoordinator):
         self.dry_contact_1_name = dry_contact_1_name
         self.dry_contact_2_name = dry_contact_2_name
         self.temp_unit = temp_unit
+        self.lock = lock
 
         super().__init__(
             hass,
@@ -118,44 +126,45 @@ class EatonEmpCoordinator(DataUpdateCoordinator):
 
     async def _async_update_data(self) -> dict:
         """Fetch data from the device."""
-        await self.client.connect()
-        if not self.client.connected:
-            raise UpdateFailed("Failed to connect to serial port")
+        async with self.lock:
+            await self.client.connect()
+            if not self.client.connected:
+                raise UpdateFailed("Failed to connect to serial port")
 
-        try:
-            data = {}
+            try:
+                data = {}
 
-            # Temperature (Input Register 5)
-            resp = await self.client.read_input_registers(
-                address=5, count=1, device_id=self.slave_id
-            )
-            if not resp.isError():
-                data["temperature"] = resp.registers[0] * 0.001
+                # Temperature (Input Register 5)
+                resp = await self.client.read_input_registers(
+                    address=5, count=1, device_id=self.slave_id
+                )
+                if not resp.isError():
+                    data["temperature"] = resp.registers[0] * 0.001
 
-            # Humidity (Input Register 10)
-            resp = await self.client.read_input_registers(
-                address=10, count=1, device_id=self.slave_id
-            )
-            if not resp.isError():
-                data["humidity"] = resp.registers[0] * 0.1
+                # Humidity (Input Register 10)
+                resp = await self.client.read_input_registers(
+                    address=10, count=1, device_id=self.slave_id
+                )
+                if not resp.isError():
+                    data["humidity"] = resp.registers[0] * 0.1
 
-            # Dry Contact 1 (Discrete Input 0)
-            resp = await self.client.read_discrete_inputs(
-                address=0, count=1, device_id=self.slave_id
-            )
-            if not resp.isError():
-                value = resp.bits[0]
-                data["dry_contact_1"] = not value if self.invert_dry_contacts else value
+                # Dry Contact 1 (Discrete Input 0)
+                resp = await self.client.read_discrete_inputs(
+                    address=0, count=1, device_id=self.slave_id
+                )
+                if not resp.isError():
+                    value = resp.bits[0]
+                    data["dry_contact_1"] = not value if self.invert_dry_contacts else value
 
-            # Dry Contact 2 (Discrete Input 1)
-            resp = await self.client.read_discrete_inputs(
-                address=1, count=1, device_id=self.slave_id
-            )
-            if not resp.isError():
-                value = resp.bits[0]
-                data["dry_contact_2"] = not value if self.invert_dry_contacts else value
+                # Dry Contact 2 (Discrete Input 1)
+                resp = await self.client.read_discrete_inputs(
+                    address=1, count=1, device_id=self.slave_id
+                )
+                if not resp.isError():
+                    value = resp.bits[0]
+                    data["dry_contact_2"] = not value if self.invert_dry_contacts else value
 
-            return data
+                return data
 
-        finally:
-            self.client.close()
+            finally:
+                self.client.close()

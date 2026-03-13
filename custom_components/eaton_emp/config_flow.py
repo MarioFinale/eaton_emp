@@ -43,30 +43,34 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         errors: dict[str, str] = {}
         if user_input is not None:
-            try:
-                await self._test_connection(user_input)
-                data = {
-                    CONF_SERIAL_PORT: user_input[CONF_SERIAL_PORT],
-                    CONF_SLAVE_ID: user_input[CONF_SLAVE_ID],
-                }
-                options = {
-                    CONF_NAME: user_input.get(CONF_NAME, DEFAULT_NAME),
-                    CONF_UPDATE_INTERVAL: user_input.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL),
-                    CONF_INVERT_DRY_CONTACTS: user_input.get(CONF_INVERT_DRY_CONTACTS, DEFAULT_INVERT_DRY_CONTACTS),
-                    CONF_DRY_CONTACT_1_NAME: user_input.get(CONF_DRY_CONTACT_1_NAME, DEFAULT_DRY_CONTACT_1_NAME),
-                    CONF_DRY_CONTACT_2_NAME: user_input.get(CONF_DRY_CONTACT_2_NAME, DEFAULT_DRY_CONTACT_2_NAME),
-                    CONF_TEMP_UNIT: user_input.get(CONF_TEMP_UNIT, DEFAULT_TEMP_UNIT),
-                }
-                return self.async_create_entry(
-                    title=user_input.get(CONF_NAME, DEFAULT_NAME),
-                    data=data,
-                    options=options,
-                )
-            except ConnectionError:
-                errors["base"] = "cannot_connect"
-            except Exception:
-                _LOGGER.exception("Unexpected exception")
-                errors["base"] = "unknown"
+            name = user_input.get(CONF_NAME, DEFAULT_NAME)
+            if self._name_exists(name):
+                errors["base"] = "name_already_used"
+            else:
+                try:
+                    await self._test_connection(user_input)
+                    data = {
+                        CONF_SERIAL_PORT: user_input[CONF_SERIAL_PORT],
+                        CONF_SLAVE_ID: user_input[CONF_SLAVE_ID],
+                    }
+                    options = {
+                        CONF_NAME: name,
+                        CONF_UPDATE_INTERVAL: user_input.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL),
+                        CONF_INVERT_DRY_CONTACTS: user_input.get(CONF_INVERT_DRY_CONTACTS, DEFAULT_INVERT_DRY_CONTACTS),
+                        CONF_DRY_CONTACT_1_NAME: user_input.get(CONF_DRY_CONTACT_1_NAME, DEFAULT_DRY_CONTACT_1_NAME),
+                        CONF_DRY_CONTACT_2_NAME: user_input.get(CONF_DRY_CONTACT_2_NAME, DEFAULT_DRY_CONTACT_2_NAME),
+                        CONF_TEMP_UNIT: user_input.get(CONF_TEMP_UNIT, DEFAULT_TEMP_UNIT),
+                    }
+                    return self.async_create_entry(
+                        title=name,
+                        data=data,
+                        options=options,
+                    )
+                except ConnectionError:
+                    errors["base"] = "cannot_connect"
+                except Exception:
+                    _LOGGER.exception("Unexpected exception")
+                    errors["base"] = "unknown"
 
         return self.async_show_form(
             step_id="user",
@@ -86,6 +90,13 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             ),
             errors=errors,
         )
+
+    def _name_exists(self, name: str) -> bool:
+        """Check if name is already used by another entry."""
+        for entry in self.hass.config_entries.async_entries(DOMAIN):
+            if entry.options.get(CONF_NAME) == name:
+                return True
+        return False
 
     async def _test_connection(self, data: dict[str, Any]) -> None:
         """Test connection to the probe."""
@@ -122,12 +133,16 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
     """Handle options flow for Eaton EMP."""
 
     def __init__(self, config_entry: ConfigEntry) -> None:
-        self.config_entry = config_entry
+        super().__init__(config_entry)
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         errors: dict[str, str] = {}
         if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
+            name = user_input.get(CONF_NAME, self.config_entry.options.get(CONF_NAME, DEFAULT_NAME))
+            if name != self.config_entry.options.get(CONF_NAME) and self._name_exists(name):
+                errors["base"] = "name_already_used"
+            else:
+                return self.async_create_entry(title="", data=user_input)
 
         current_name = self.config_entry.options.get(CONF_NAME, DEFAULT_NAME)
         current_interval = self.config_entry.options.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL)
@@ -152,3 +167,10 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             ),
             errors=errors,
         )
+
+    def _name_exists(self, name: str) -> bool:
+        """Check if name is already used by another entry."""
+        for entry in self.hass.config_entries.async_entries(DOMAIN):
+            if entry.entry_id != self.config_entry.entry_id and entry.options.get(CONF_NAME) == name:
+                return True
+        return False
